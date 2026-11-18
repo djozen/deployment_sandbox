@@ -1,0 +1,64 @@
+# With docker classic
+RUNNER_TOKEN=[emplacement du token] \
+docker run --rm \
+  -v /srv/gitlab-runner/config:/etc/gitlab-runner \
+  -v //var/run/docker.sock:/var/run/docker.sock \
+  gitlab/gitlab-runner register \
+  --non-interactive \
+  --url http://localhost:8084 \
+  --token $RUNNER_TOKEN \
+  --executor docker \
+  --docker-image alpine:latest \
+  --docker-pull-policy if-not-present \
+  --description docker-runner
+
+# With docker windows git bash and gitlab in docker
+mkdir -p /c/gitlab-runner/config
+export RUNNER_TOKEN="glrt-VOTRE_NOUVEAU_JETON_ICI"
+MSYS_NO_PATHCONV=1 docker run --rm \
+  -v /srv/gitlab-runner/config:/etc/gitlab-runner \
+  -v //var/run/docker.sock:/var/run/docker.sock \
+  gitlab/gitlab-runner register \
+  --non-interactive \
+  --url "http://host.docker.internal:8084" \
+  --token "$RUNNER_TOKEN" \
+  --executor docker \
+  --docker-image "alpine:latest" \
+  --docker-pull-policy "if-not-present" \
+  --description "docker-runner"
+
+# run runner permanently
+  MSYS_NO_PATHCONV=1 docker run -d \
+  --name gitlab-runner \
+  --restart always \
+  -v /srv/gitlab-runner/config:/etc/gitlab-runner \
+  -v //var/run/docker.sock:/var/run/docker.sock \
+  gitlab/gitlab-runner:latest
+
+# linux Ubuntu
+curl -L "https://packages.gitlab.com/install/repositories/runner/gitlab-runner/script.deb.sh" -o script.deb.sh
+less script.deb.sh
+sudo bash script.deb.sh
+sudo apt install gitlab-runner
+
+# To install a specific version of GitLab Runner:
+# As of gitlab-runner version v17.7.1, 
+# when you install a specific version of gitlab-runner 
+# that is not the latest version, you must explicitly 
+# install the required gitlab-runner-helper-packages 
+# for that version. 
+# This requirement exists due to an apt/apt-get limitation.
+apt-cache madison gitlab-runner
+sudo apt install gitlab-runner=17.7.1-1 gitlab-runner-helper-images=17.7.1-1
+
+# Upgrade GitLab Runner
+sudo apt update
+sudo apt install gitlab-runner
+
+# During package installation or upgrade, 
+# GitLab Runner automatically prunes unused Docker 
+# images and containers. To skip this behavior, 
+# set the NO_DOCKER_PRUNE environment variable:
+sudo apt update
+NO_DOCKER_PRUNE=1 sudo apt install gitlab-runner
+

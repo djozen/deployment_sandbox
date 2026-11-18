@@ -1,0 +1,13 @@
+/.docker-synced
+/.git
+/vendor
+/var
+/node_modules
+/dump
+/deploy_notes
+/documentation
+/composer.phar
+/*.sql
+/*.tar.gz
+/*.docx
+/*.csv

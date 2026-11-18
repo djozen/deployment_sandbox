@@ -1,0 +1,19 @@
+FROM httpd:2.4
+
+RUN sed -i \
+        -e 's|^#\(LoadModule proxy_module .*\)|\1|' \
+        -e 's|^#\(LoadModule proxy_fcgi_module .*\)|\1|' \
+        -e 's|^#\(LoadModule rewrite_module .*\)|\1|' \
+        -e 's|^#\(LoadModule headers_module .*\)|\1|' \
+        -e 's|^#\(LoadModule deflate_module .*\)|\1|' \
+        -e 's|^#\(Include conf/extra/httpd-vhosts.conf\)|\1|' \
+        /usr/local/apache2/conf/httpd.conf
+
+COPY docker/apache/vhost.conf /usr/local/apache2/conf/extra/httpd-vhosts.conf
+
+# SOURCE_PATH : racine du projet dans l'image app
+ARG SOURCE_PATH=/var/www/html
+ARG APP_PATH=/var/www/html
+
+# Code copié depuis php-fpm (même chemin dans les deux images) ; le PHP est exécuté par php-fpm
+COPY --from=app ${SOURCE_PATH} ${APP_PATH}
