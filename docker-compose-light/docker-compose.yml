@@ -1,0 +1,30 @@
+services:
+  web:
+    build:
+      context: .
+      target: web
+    ports:
+      - "8089:80"
+    depends_on:
+      - php
+
+  php:
+    build:
+      context: .
+      target: php
+    env_file: .env.dev
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: mysql:8.4
+    env_file: .env.dev
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  db_data:

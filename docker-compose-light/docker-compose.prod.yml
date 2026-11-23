@@ -1,0 +1,57 @@
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - web
+    logging: *default-logging
+
+  web:
+    image: ${REGISTRY_IMAGE}/web:${IMAGE_TAG}
+    restart: unless-stopped
+    depends_on:
+      - php
+    logging: *default-logging
+
+  php:
+    image: ${REGISTRY_IMAGE}/php:${IMAGE_TAG}
+    restart: unless-stopped
+    env_file: .env.prod
+    depends_on:
+      db:
+        condition: service_healthy
+    logging: *default-logging
+
+
+  db:
+    image: mysql:8.4
+    restart: unless-stopped
+    env_file: .env.prod
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 10  
+    logging: *default-logging
+      
+volumes:
+  caddy_data:
+  caddy_config:
+  db_data:

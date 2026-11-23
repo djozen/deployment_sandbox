@@ -1,0 +1,15 @@
+{
+    "name": "jnago/docker-compose-light",
+    "autoload": {
+        "psr-4": {
+            "Jnago\\DockerComposeLight\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "Johan Nagou",
+            "email": "djozen.web@gmail.com"
+        }
+    ],
+    "require": {}
+}

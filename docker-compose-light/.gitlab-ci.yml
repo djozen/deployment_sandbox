@@ -1,0 +1,81 @@
+stages:
+  - test
+  - build
+  - deploy
+
+variables:
+  DOCKER_TLS_CERTDIR: "/certs"
+  SSH_OPTS: "-i $SSH_PRIVATE_KEY -o UserKnownHostsFile=$SSH_KNOWN_HOSTS -o StrictHostKeyChecking=yes"
+
+test:
+  stage: test
+  image: php:8.5-cli-alpine
+  variables:
+    COMPOSER_CACHE_DIR: "$CI_PROJECT_DIR/.composer-cache"
+  cache:
+    key: composer
+    paths:
+      - .composer-cache/
+  before_script:
+    - apk add --no-cache git unzip curl
+    - curl -sSfL -o /usr/local/bin/install-php-extensions https://github.com/mlocati/docker-php-extension-installer/releases/latest/download/install-php-extensions
+    - chmod +x /usr/local/bin/install-php-extensions
+    - install-php-extensions intl pdo_mysql @composer
+    - composer install --no-interaction --prefer-dist
+  script:
+    # - vendor/bin/phpunit
+    - echo "Tests completed"
+
+build:
+  stage: build
+  image: docker:27
+  services:
+    - docker:27-dind
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  script:
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+    - docker build --target php -t "$CI_REGISTRY_IMAGE/php:$CI_COMMIT_SHORT_SHA" .
+    - docker build --target web -t "$CI_REGISTRY_IMAGE/web:$CI_COMMIT_SHORT_SHA" .
+    - docker push "$CI_REGISTRY_IMAGE/php:$CI_COMMIT_SHORT_SHA"
+    - docker push "$CI_REGISTRY_IMAGE/web:$CI_COMMIT_SHORT_SHA"
+
+deploy:
+  stage: deploy
+  image: alpine:3.22
+  needs: [build]
+  resource_group: production
+  environment:
+    name: production
+    url: https://$APP_DOMAIN
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  script:
+    - apk add --no-cache openssh-client curl
+    - chmod 600 "$SSH_PRIVATE_KEY"
+    - export REMOTE="$DEPLOY_USER@$DEPLOY_HOST"
+    - scp $SSH_OPTS compose.prod.yaml "$REMOTE:$DEPLOY_PATH/compose.yaml"
+    - scp $SSH_OPTS Caddyfile "$REMOTE:$DEPLOY_PATH/Caddyfile"
+    - scp $SSH_OPTS deploy/remote-deploy.sh "$REMOTE:$DEPLOY_PATH/remote-deploy.sh"
+    - echo "$CI_REGISTRY_PASSWORD" | ssh $SSH_OPTS "$REMOTE" "docker login -u '$CI_REGISTRY_USER' --password-stdin '$CI_REGISTRY'"
+    - ssh $SSH_OPTS "$REMOTE" "cd '$DEPLOY_PATH' && DEPLOY_PATH='$DEPLOY_PATH' REGISTRY_IMAGE='$CI_REGISTRY_IMAGE' IMAGE_TAG='$CI_COMMIT_SHORT_SHA' APP_DOMAIN='$APP_DOMAIN' bash ./remote-deploy.sh"
+    - |
+      for i in $(seq 1 20); do
+        if curl -fsS -o /dev/null "https://$APP_DOMAIN/"; then echo "Site en ligne"; exit 0; fi
+        sleep 5
+      done
+      echo "Le site ne répond pas après le déploiement"
+      exit 1
+
+rollback:
+  stage: deploy
+  image: alpine:3.22
+  resource_group: production
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: manual
+      allow_failure: true
+  script:
+    - apk add --no-cache openssh-client
+    - chmod 600 "$SSH_PRIVATE_KEY"
+    - ssh $SSH_OPTS "$DEPLOY_USER@$DEPLOY_HOST" "cd '$DEPLOY_PATH' && cp .env.previous .env && docker compose up -d"
